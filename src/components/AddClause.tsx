@@ -20,7 +20,7 @@ const AddClause = () => {
             <div className="flex gap-x-4 items-center">
                 <p className="font-bold">Add clauses</p>
                 <div className="flex shadow rounded overflow-hidden font-bold">
-                    <button
+                    {/* <button
                         className={
                             "border w-16 text-center py-1 " +
                             (mode === ModeEnum.BIN &&
@@ -43,7 +43,7 @@ const AddClause = () => {
                         }}
                     >
                         DEC
-                    </button>
+                    </button> */}
                 </div>
             </div>
             <div className="flex gap-x-4">

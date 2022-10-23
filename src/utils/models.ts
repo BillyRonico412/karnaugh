@@ -3,9 +3,18 @@ export enum ModeEnum {
     BIN,
 }
 
+export type Coord = {
+    ligne: number;
+    col: number;
+};
+
+export const compareCoord = (coord1: Coord, coord2: Coord) =>
+    coord1.ligne === coord2.ligne && coord1.col === coord2.col;
+
 export class Karnaugh {
     nbVar: number;
     table: number[][];
+    voisinageAlreadyCompute: Coord[][];
 
     constructor(nbVar: number) {
         if (nbVar < 2 || nbVar > 6) {
@@ -14,6 +23,7 @@ export class Karnaugh {
         this.nbVar = nbVar;
         this.table = [];
         this.initTable();
+        this.voisinageAlreadyCompute = [];
     }
 
     width() {
@@ -29,7 +39,7 @@ export class Karnaugh {
         for (let i = 0; i < this.height(); i++) {
             const row = [];
             for (let j = 0; j < this.width(); j++) {
-                row.push(0);
+                row.push(-1);
             }
             this.table.push(row);
         }
@@ -61,7 +71,7 @@ export class Karnaugh {
         posHorizontal: number,
         value: number
     ): boolean {
-        if (value < 0 || value >= 0b1 << this.nbVar) {
+        if (value < -1 || value >= 0b1 << this.nbVar) {
             return false;
         }
         const newTable = [];
@@ -116,7 +126,7 @@ export class Karnaugh {
         const res: string[] = [];
         for (let i = 0; i < this.height(); i++) {
             for (let j = 0; j < this.width(); j++) {
-                if (this.table[i][j] !== 0) {
+                if (this.table[i][j] !== -1) {
                     let s = "";
                     for (let k = 0; k < this.nbVar; k++) {
                         if (
@@ -136,6 +146,187 @@ export class Karnaugh {
                 }
             }
         }
+        return res;
+    }
+
+    getCell(coord: Coord): number {
+        return this.table[coord.ligne][coord.col];
+    }
+
+    getDecalageHaut(coord: Coord, n: number = 1): Coord {
+        let ligne = coord.ligne - (n % this.height());
+        if (ligne < 0) {
+            ligne += this.height();
+        }
+        return { ligne, col: coord.col };
+    }
+
+    getDecalageBas(coord: Coord, n: number = 1): Coord {
+        let ligne = (coord.ligne + n) % this.height();
+        return { ligne, col: coord.col };
+    }
+
+    getDecalageGauche(coord: Coord, n: number = 1): Coord {
+        let col = coord.col - (n % this.width());
+        if (col < 0) {
+            col += this.width();
+        }
+        return { ligne: coord.ligne, col };
+    }
+
+    getDecalageDroite(coord: Coord, n: number = 1): Coord {
+        let col = (coord.col + n) % this.width();
+        return { ligne: coord.ligne, col };
+    }
+
+    getVoisinage(): Coord[][] {
+        const coordNonVides: Coord[] = [];
+        for (let i = 0; i < this.height(); i++) {
+            for (let j = 0; j < this.width(); j++) {
+                if (this.table[i][j] !== -1) {
+                    coordNonVides.push({ ligne: i, col: j });
+                }
+            }
+        }
+
+        let voisinages: Coord[][] = [];
+        this.voisinageAlreadyCompute = [];
+
+        for (const coordNonVide of coordNonVides) {
+            const newVoisinages = this.getVoisinageCoords([coordNonVide]);
+            const newVoisinagesFilter = newVoisinages.filter((voisin1) =>
+                this.voisinageAlreadyCompute.every(
+                    (voisin2) =>
+                        voisin1.length !== voisin2.length ||
+                        voisin2.some((coord1) =>
+                            voisin1.every(
+                                (coord2) => !compareCoord(coord1, coord2)
+                            )
+                        )
+                )
+            );
+            this.voisinageAlreadyCompute = [
+                ...this.voisinageAlreadyCompute,
+                ...newVoisinagesFilter,
+            ];
+            voisinages = [...voisinages, ...newVoisinagesFilter];
+        }
+
+        let res: Coord[][] = [];
+        for (const voisin1 of voisinages) {
+            if (
+                res.every(
+                    (voisin2) =>
+                        voisin1.length !== voisin2.length ||
+                        voisin2.some((coord1) =>
+                            voisin1.every(
+                                (coord2) => !compareCoord(coord1, coord2)
+                            )
+                        )
+                )
+            ) {
+                res.push(voisin1);
+            }
+        }
+
+        console.log(res);
+
+        return res;
+    }
+
+    getVoisinageCoords(coords: Coord[]): Coord[][] {
+        let nbreDecalageHauteur = 1;
+        coords.forEach((coord) => {
+            let decalageHaut = this.getDecalageHaut(coord, nbreDecalageHauteur);
+            while (coords.some((it) => compareCoord(it, decalageHaut))) {
+                nbreDecalageHauteur++;
+                if (nbreDecalageHauteur === this.height()) {
+                    nbreDecalageHauteur = 0;
+                    break;
+                }
+                decalageHaut = this.getDecalageHaut(coord, nbreDecalageHauteur);
+            }
+        });
+
+        let nbreDecalageLargeur = 1;
+        coords.forEach((coord) => {
+            let decalageDroite = this.getDecalageDroite(
+                coord,
+                nbreDecalageLargeur
+            );
+            while (coords.some((it) => compareCoord(it, decalageDroite))) {
+                nbreDecalageLargeur++;
+                if (nbreDecalageLargeur === this.height()) {
+                    nbreDecalageLargeur = 0;
+                    break;
+                }
+                decalageDroite = this.getDecalageDroite(
+                    coord,
+                    nbreDecalageLargeur
+                );
+            }
+        });
+
+        let resHaut: Coord[][] = [];
+        let resBas: Coord[][] = [];
+        if (nbreDecalageHauteur > 0) {
+            const decalageHaut = coords.map((coord) =>
+                this.getDecalageHaut(coord, nbreDecalageHauteur)
+            );
+
+            if (decalageHaut.every((coord) => this.getCell(coord) !== -1)) {
+                resHaut = this.getVoisinageCoords([...coords, ...decalageHaut]);
+            }
+
+            const decalageBas = coords.map((coord) =>
+                this.getDecalageBas(coord, nbreDecalageHauteur)
+            );
+
+            if (decalageBas.every((coord) => this.getCell(coord) !== -1)) {
+                resBas = this.getVoisinageCoords([...coords, ...decalageBas]);
+            }
+        }
+
+        let resGauche: Coord[][] = [];
+        let resDroite: Coord[][] = [];
+
+        if (nbreDecalageLargeur > 0) {
+            const decalageGauche = coords.map((coord) =>
+                this.getDecalageGauche(coord, nbreDecalageLargeur)
+            );
+
+            if (decalageGauche.every((coord) => this.getCell(coord) !== -1)) {
+                resGauche = this.getVoisinageCoords([
+                    ...coords,
+                    ...decalageGauche,
+                ]);
+            }
+
+            const decalageDroite = coords.map((coord) =>
+                this.getDecalageDroite(coord, nbreDecalageLargeur)
+            );
+
+            if (decalageDroite.every((coord) => this.getCell(coord) !== -1)) {
+                resDroite = this.getVoisinageCoords([
+                    ...coords,
+                    ...decalageDroite,
+                ]);
+            }
+        }
+
+        let res: Coord[][] = [];
+
+        if (
+            resHaut.length === 0 &&
+            resBas.length === 0 &&
+            resGauche.length === 0 &&
+            resDroite.length === 0
+        ) {
+            res = [coords];
+        } else {
+            res = [...resHaut, ...resBas, ...resGauche, ...resDroite];
+        }
+
         return res;
     }
 }
